@@ -1,3 +1,6 @@
+import { Enumeration } from "./context-schema";
+import { ITypeData } from "./type-data";
+
 export class Token {
     static operator(op: Operations): Token {
         return new Token(TokenType.operation, op);
@@ -47,11 +50,12 @@ export class Token {
         if (this.type?.name === PrimitiveTypes.enum.name) return true;
         if (this.type === PrimitiveTypes.string)
             return (this.text !== "string");
-        if (this.type === PrimitiveTypes.number) 
+        if (this.type === PrimitiveTypes.number)
             return (this.text !== "number");
         return false;
     }
 }
+
 export interface IType {
     isAssignableFrom(type: IType | undefined): unknown;
     get name(): string;

@@ -1,5 +1,6 @@
 export *  from "./services/lexical-analizer";
-export *  from "./models/token";
+export *  from "./models/token"; 
+export *  from "./models/type-data"; 
 export *  from "./models/context-schema";
 export *  from "./models/operation-orders";
 export *  from "./languages/ast";

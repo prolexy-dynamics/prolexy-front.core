@@ -40,15 +40,17 @@ export class ExtensionMethod extends Method {
     }
 }
 export class MethodSigneture implements IType {
-    constructor(public returnType: IType, public parameters: IType[]) {
+    constructor(
+        public returnType: IType,
+        public parameters: IType[],
+        public name: string = "method") {
     }
-    get name() { return "method"; }
     get genericArguments(): Array<IType> {
         return this.parameters.filter(p => p instanceof GenericType);
     }
     makeGenericType(genericTypes: Array<IType>) {
         var params = this.parameters.map(p => p instanceof GenericType ? genericTypes[p.index] : p.makeGenericType(genericTypes));
-        return new MethodSigneture(this.returnType.makeGenericType(genericTypes), params);
+        return new MethodSigneture(this.returnType.makeGenericType(genericTypes), params, this.name);
     }
     isAssignableFrom(type: IType): unknown {
         return type instanceof GenericType;

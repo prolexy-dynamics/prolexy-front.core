@@ -222,7 +222,7 @@ export class TypeDetectorVisitor implements AstVisitor<TypeDetectorContext> {
                 result.suggestions.push(new Token(TokenType.keyword, "true", PrimitiveTypes.bool));
                 result.suggestions.push(new Token(TokenType.keyword, "false", PrimitiveTypes.bool));
             }
-            else if (context.expectedType === PrimitiveTypes.enum) {
+            else if (context.expectedType instanceof Enumeration) {
                 result.suggestions = [];
                 var enums = context.expectedType as Enumeration;
                 for (const item of enums.items) {

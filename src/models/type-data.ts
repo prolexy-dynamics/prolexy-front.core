@@ -1,4 +1,4 @@
-import { ContextSchema, ContextSchemaRepository, Enumerable, Enumeration, GenericType, Method, MethodSigneture, Property } from "./context-schema";
+import { ContextSchema, ContextSchemaRepository, Enumerable, Enumeration, ExtensionMethod, GenericType, Method, MethodSigneture, Property } from "./context-schema";
 import { IType, PrimitiveTypes } from "./token";
 
 export enum TypeCategory {
@@ -17,7 +17,7 @@ function getTypeData(category: TypeCategory): Function {
         case TypeCategory.Complex: return ComplexTypeData;
         case TypeCategory.Method: return MethodSignatureData;
         case TypeCategory.Enumerable: return EnumerableTypeData;
-        case TypeCategory.Generic: return GenericType;
+        case TypeCategory.Generic: return GenericTypeData;
         case TypeCategory.ReferenceType: return ComplexTypeReferenceData;
     }
 }
@@ -28,9 +28,16 @@ function convert(obj: any): ITypeData {
     return result;
 }
 export function createTypeFromJson(repository: ContextSchemaRepository, json: any) {
-    var ctx = new context(repository, 
+    var ctx = new context(repository,
         convert(json.businessObjectTypeData) as ComplexTypeData,
-        json.complexTypes.map((t: any) => convert(t)));
+        json.complexDataTypes.map((t: any) => convert(t)));
+    ContextSchema.extensionMethods = json.extensionMethods
+        .map((m: MethodSignatureData) => convert(m))
+        .map((m: MethodSignatureData) => new ExtensionMethod(
+            m.name,
+            m.name,
+            m.contextType.createType(ctx),
+            m.createType(ctx) as MethodSigneture));
     return ctx;
 }
 export class context {
@@ -51,12 +58,31 @@ export class ComplexTypeReferenceData implements ITypeData {
     category: TypeCategory = TypeCategory.ReferenceType;
 
     createType(context: context): IType {
-        var result = context.repository.getByName(this.name);
+        var result = context.repository.getByName(this.name) as ContextSchema;
         if (!result) {
-            result = context.complexTypes.find(t => t.name === this.name)!.createType(context);
+            result = new ContextSchema(context.repository,
+                this.name,
+                [],
+                []);
             context.repository.register(this.name, result);
+            var tmp = context.complexTypes.find(t => t.name === this.name)!.createType(context) as ContextSchema;
+            result.properties = tmp.properties;
+            result.methods = tmp.methods;
         }
         return result;
+    }
+    assign(obj: any) {
+        Object.assign(this, obj);
+    }
+}
+export class GenericTypeData implements ITypeData {
+    constructor(
+        public name: string
+    ) { }
+    category: TypeCategory = TypeCategory.ReferenceType;
+
+    createType(context: context): IType {
+        return new GenericType(this.name);
     }
     assign(obj: any) {
         Object.assign(this, obj);
@@ -85,7 +111,8 @@ export class ComplexTypeData implements ITypeData {
         this.methods = (obj.methods || [])
             .map((m: any) =>
                 new MethodData(m.methodName,
-                    obj.parameters.map((p: any) => new ParameterData(p.parameterName, convert(p.parameterType))),
+                    convert(m.contextType),
+                    m.parameters.map((p: any) => new ParameterData(p.parameterName, convert(p.parameterType))),
                     convert(m.returnType)));
     }
 }
@@ -100,11 +127,13 @@ class PropertyData {
 export class MethodSignatureData implements ITypeData {
     constructor(
         public name: string,
+        public contextType: ITypeData,
         public parameters: Array<ParameterData>,
         public returnType: ITypeData) { }
     assign(obj: any) {
         Object.assign(this, obj);
         this.returnType = convert(obj.returnType);
+        this.contextType = convert(obj.contextType);
         this.parameters = obj.parameters.map((p: any) => new ParameterData(p.parameterName, convert(p.parameterType)));
     }
     category: TypeCategory = TypeCategory.Method;
@@ -119,6 +148,7 @@ export class MethodSignatureData implements ITypeData {
 export class MethodData {
     constructor(
         public methodName: string,
+        public contextType: ITypeData,
         public parameters: Array<ParameterData>,
         public returnType: ITypeData) { }
 
@@ -151,6 +181,7 @@ export class PrimitiveTypeData implements ITypeData {
     }
     assign(obj: any) {
         this.name = obj.name;
+        this.category = TypeCategory.Primitive;
     }
     category: TypeCategory = TypeCategory.Primitive;
 

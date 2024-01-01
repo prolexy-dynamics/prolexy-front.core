@@ -566,16 +566,18 @@ export class Parser {
         var head = this.peek();
         if (!head) return new ExpectedDeclaration(this.closeSpan());
         var parameters: Array<Token> = [];
-        while (head?.tokenType == TokenType.identifier) {
+        while (true) {
+            if (head?.tokenType != TokenType.identifier)
+                return new ExpectedDeclaration(this.closeSpan());
             parameters.push(head);
             this.advance();
-            if (!this.consumeOptional(Operations.point))
+            if (!this.consumeOptional(Operations.comma))
                 break;
             head = this.peek();
         }
 
         if (!this.consumeOptional(Operations.arrowFunction))
-            return this.ExpectedTokenTypes([TokenType.operation], [Operations.arrowFunction]);
+            return this.ExpectedTokenTypes([TokenType.operation], [Operations.comma, Operations.arrowFunction]);
         var body = this.parseExp();
         return new AnonymousMethod(parameters, body, this.closeSpan());
     }

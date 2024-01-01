@@ -6,7 +6,7 @@ export class SemanticErrorContext {
     constructor(public schema: IType) { }
     errors: Array<{ span: Span, message: string }> = [];
     stackCall: Stack<IType> = new Stack<IType>();
-    expectedType: IType | undefined = null!;
+    expectedType: Stack<IType> = new Stack<IType>;
 };
 var compatiblityChecker = [
     { operations: [...numericOperations], left: PrimitiveTypes.number, right: PrimitiveTypes.number, result: PrimitiveTypes.number },
@@ -83,18 +83,19 @@ export class SemanticErrorAnalizer implements AstVisitor<SemanticErrorContext> {
                 }
                 context.stackCall.push(schem);
             }
-            context.expectedType = m.parameters[i++];
+            context.expectedType.push(m.parameters[i++]);
             arg.visit(this, context);
             if (arg instanceof AnonymousMethod) context.stackCall.pop();
         }
         return m.returnType;
     }
     visitAnonymousMethod(ast: AnonymousMethod, context: SemanticErrorContext): any {
-        if (!(context.expectedType instanceof MethodSigneture))
-            context.errors.push({ span: ast.span, message: `expected type is '${context.expectedType?.name}' but anonymous method defined here.` })
-
+        var expected = context.expectedType.pop();
+        if (!(expected instanceof MethodSigneture))
+            context.errors.push({ span: ast.span, message: `expected type is '${expected?.name}' but anonymous method defined here.` })
         var result = ast.expression.visit(this, context) as IType;
-        var returnType = (context.expectedType as MethodSigneture).returnType;
+        if (!expected) return;
+        var returnType = (expected as MethodSigneture).returnType;
         if (!returnType.isAssignableFrom(result))
             context.errors.push({ span: ast.expression.span, message: `expected type is '${returnType?.name}' but expression returns '${result?.name}'.` })
     }
@@ -122,7 +123,7 @@ export class SemanticErrorAnalizer implements AstVisitor<SemanticErrorContext> {
         var method = ContextSchema.extensionMethods.find(p => p.methodContext.isAssignableFrom(context.schema) && p.name === token?.value);
         if (!method) return context!.schema;
         return Object.assign(Object.create(ExtensionMethod.prototype), { caption: method.caption, methodContext: context.schema, signeture: method.signeture })
-            .makeGenericMethod();
+            .makeGenericMethod({});
     }
     visitLiteralPrimitive(ast: LiteralPrimitive, context: SemanticErrorContext): any {
         return ast.token.type === PrimitiveTypes.enum

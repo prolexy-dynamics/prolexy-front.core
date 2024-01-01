@@ -35,11 +35,15 @@ export class ExtensionMethod extends Method {
     constructor(name: string, caption: string, public methodContext: IType, signeture: MethodSigneture) {
         super(name, caption, signeture);
     }
-    makeGenericMethod() {
-        return this.signeture.makeGenericType(this.methodContext.genericArguments);
+    makeGenericMethod(specificTypes: { [key: string]: IType }) {
+        return this.signeture.makeGenericType(specificTypes);
     }
 }
 export class MethodSigneture implements IType {
+    specificArguments: { [key: string]: IType } = {};
+    setSpecifitType(name: string, arg1: IType) {
+        this.specificArguments[name] = arg1;
+    }
     constructor(
         public returnType: IType,
         public parameters: IType[],
@@ -48,13 +52,19 @@ export class MethodSigneture implements IType {
     get genericArguments(): Array<IType> {
         return this.parameters.filter(p => p instanceof GenericType);
     }
-    makeGenericType(genericTypes: Array<IType>) {
-        var params = this.parameters.map(p => p instanceof GenericType ? genericTypes[p.index] : p.makeGenericType(genericTypes));
-        return new MethodSigneture(this.returnType.makeGenericType(genericTypes), params, this.name);
+    makeGenericType(specificTypes: { [key: string]: IType }) {
+        specificTypes = {...specificTypes,...this.specificArguments};
+        var result = new MethodSigneture(
+            this.returnType.makeGenericType(specificTypes),
+            this.parameters.map(p => p.makeGenericType(specificTypes)),
+            this.name);
+        result.specificArguments = specificTypes;
+        return result;
     }
     isAssignableFrom(type: IType): unknown {
         return type instanceof GenericType;
     }
+
 }
 export class Enumerable implements IType {
     constructor(public elementType: IType) { }
@@ -62,24 +72,23 @@ export class Enumerable implements IType {
     get genericArguments(): Array<IType> {
         return [this.elementType];
     }
-    makeGenericType(genericTypes: Array<IType>): IType {
-        return new Enumerable(this.elementType.makeGenericType(genericTypes));
+    makeGenericType(specificTypes: { [key: string]: IType }): IType {
+        return new Enumerable(this.elementType.makeGenericType(specificTypes));
     }
+
     isAssignableFrom(type: IType): unknown {
         return type instanceof Enumerable && this.elementType.isAssignableFrom(type.elementType);
     }
 
 }
 export class GenericType implements IType {
-    constructor(public index: number, public innerType: IType | null = null) { }
-    get name(): string {
-        return 'generic';
-    }
+    constructor(public name: string, public innerType: IType | null = null) { }
+
     get genericArguments(): IType[] {
-        return [];
+        return [this];
     }
-    makeGenericType(genericTypes: Array<IType>): IType {
-        return this.innerType?.makeGenericType(genericTypes) ?? genericTypes[0];
+    makeGenericType(specificTypes: { [key: string]: IType }): IType {
+        return specificTypes[this.name] || this;
     }
     isAssignableFrom(type: IType): unknown {
         return true;
@@ -92,7 +101,7 @@ export class Enumeration implements IType {
     get genericArguments(): Array<IType> {
         return [];
     }
-    makeGenericType(genericTypes: Array<IType>): IType {
+    makeGenericType(specificTypes: { [key: string]: IType }): IType {
         return this;
     }
     isAssignableFrom(type: IType): unknown {
@@ -102,25 +111,25 @@ export class Enumeration implements IType {
 }
 export class ContextSchema implements IType {
     static extensionMethods: Array<ExtensionMethod> = [
-        new ExtensionMethod("AddDays", "AddDays", PrimitiveTypes.datetime, new MethodSigneture(PrimitiveTypes.datetime, [PrimitiveTypes.number])),
-        new ExtensionMethod("Exists", "Exists", new Enumerable(new GenericType(0)),
-            new MethodSigneture(PrimitiveTypes.bool, [
-                new MethodSigneture(PrimitiveTypes.bool, [new GenericType(0)])])),
-        new ExtensionMethod("Max", "Max", new Enumerable(new GenericType(0)),
-            new MethodSigneture(PrimitiveTypes.number, [
-                new MethodSigneture(PrimitiveTypes.number, [new GenericType(0)])])),
-        new ExtensionMethod("Min", "Min", new Enumerable(new GenericType(0)),
-            new MethodSigneture(PrimitiveTypes.number, [
-                new MethodSigneture(PrimitiveTypes.number, [new GenericType(0)])])),
-        new ExtensionMethod("Avg", "Avg", new Enumerable(new GenericType(0)),
-            new MethodSigneture(PrimitiveTypes.number, [
-                new MethodSigneture(PrimitiveTypes.number, [new GenericType(0)])])),
-        new ExtensionMethod("Count", "Count ", new Enumerable(new GenericType(0)),
-            new MethodSigneture(PrimitiveTypes.number, [
-                new MethodSigneture(PrimitiveTypes.number, [new GenericType(0)])])),
-        new ExtensionMethod("Sum", "Sum ", new Enumerable(new GenericType(0)),
-            new MethodSigneture(PrimitiveTypes.number, [
-                new MethodSigneture(PrimitiveTypes.number, [new GenericType(0)])])),
+        // new ExtensionMethod("AddDays", "AddDays", PrimitiveTypes.datetime, new MethodSigneture(PrimitiveTypes.datetime, [PrimitiveTypes.number])),
+        // new ExtensionMethod("Exists", "Exists", new Enumerable(new GenericType(0)),
+        //     new MethodSigneture(PrimitiveTypes.bool, [
+        //         new MethodSigneture(PrimitiveTypes.bool, [new GenericType(0)])])),
+        // new ExtensionMethod("Max", "Max", new Enumerable(new GenericType(0)),
+        //     new MethodSigneture(PrimitiveTypes.number, [
+        //         new MethodSigneture(PrimitiveTypes.number, [new GenericType(0)])])),
+        // new ExtensionMethod("Min", "Min", new Enumerable(new GenericType(0)),
+        //     new MethodSigneture(PrimitiveTypes.number, [
+        //         new MethodSigneture(PrimitiveTypes.number, [new GenericType(0)])])),
+        // new ExtensionMethod("Avg", "Avg", new Enumerable(new GenericType(0)),
+        //     new MethodSigneture(PrimitiveTypes.number, [
+        //         new MethodSigneture(PrimitiveTypes.number, [new GenericType(0)])])),
+        // new ExtensionMethod("Count", "Count ", new Enumerable(new GenericType(0)),
+        //     new MethodSigneture(PrimitiveTypes.number, [
+        //         new MethodSigneture(PrimitiveTypes.number, [new GenericType(0)])])),
+        // new ExtensionMethod("Sum", "Sum ", new Enumerable(new GenericType(0)),
+        //     new MethodSigneture(PrimitiveTypes.number, [
+        //         new MethodSigneture(PrimitiveTypes.number, [new GenericType(0)])])),
         // new ExtensionMethod("Filter", "Filter ", new Enumerable(new GenericType(0)),
         //     new MethodSigneture(new Enumerable(new GenericType(0)), [
         //         new MethodSigneture(PrimitiveTypes.bool, [new GenericType(0)])])),
@@ -133,7 +142,7 @@ export class ContextSchema implements IType {
     get genericArguments(): Array<IType> {
         return [];
     }
-    makeGenericType(genericTypes: Array<IType>): IType {
+    makeGenericType(): IType {
         return this;
     }
     isAssignableFrom(type: IType): unknown {
@@ -146,5 +155,8 @@ export class ContextSchema implements IType {
     }
     create() {
         return new ContextSchema(this.repository, "anonymous", [], []);
+    }
+    clone(): IType {
+        return this;
     }
 }

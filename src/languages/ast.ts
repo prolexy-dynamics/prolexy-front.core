@@ -1,4 +1,4 @@
-import { ContextSchema, Enumeration, ExpType, ExtensionMethod, Method, MethodSigneture, Property } from "../models/context-schema";
+import { ContextSchema, Enumerable, Enumeration, ExpType, ExtensionMethod, Method, MethodSigneture, Property } from "../models/context-schema";
 import { OperationOrders } from "../models/operation-orders";
 import { binaryoperations, dateOperations, IType, KeyWords, logicalOperations, numericOperations, Operations, PrimitiveTypes, relationalOperations, stringOperations, Token, TokenType } from "../models/token";
 import { Stack } from "../services/Stack";
@@ -104,7 +104,7 @@ export class ExpectedTokenTypes extends Ast {
 }
 export class ExpectedDeclaration extends Ast {
     constructor(span: Span) {
-        super(undefined, new Span(span.start, span.start));
+        super(undefined, new Span(span.start, span.end));
     }
     visit<T>(visitor: AstVisitor<T>, context: T): any {
         return visitor.visitExpectedDeclaration(this, context);
@@ -204,7 +204,7 @@ export class TypeDetectorVisitor implements AstVisitor<TypeDetectorContext> {
             return null;
         var result = (ast.tokenTypes.indexOf(TokenType.identifier) > -1)
             ? this.suggestIdentifier(context, undefined, context.expectedType)
-            : { suggestions: [] as Array<Token>, suggestionLoader: null as (Promise<Array<Token>> | null)};
+            : { suggestions: [] as Array<Token>, suggestionLoader: null as (Promise<Array<Token>> | null) };
         if (ast.tokenTypes.indexOf(TokenType.const) > -1) {
             if (context.expectedType === PrimitiveTypes.number) {
                 if (context.lastselectedProperty?.dataSource?.url)
@@ -351,7 +351,7 @@ export class TypeDetectorVisitor implements AstVisitor<TypeDetectorContext> {
             return { suggestions: [new Token(TokenType.operation, Operations.begin_parentese)] };
         }
         var method = ast.method.visit(this, context) as TypeDetectorResult;
-        var argIndex = 0, signature : MethodSigneture | null = null;
+        var argIndex = 0, signature: MethodSigneture | null = null;
         if (method?.type instanceof MethodSigneture) {
             signature = (method.type as MethodSigneture);
         }
@@ -377,6 +377,14 @@ export class TypeDetectorVisitor implements AstVisitor<TypeDetectorContext> {
                 }
                 return arg.visit(this, context);
             }
+            else if(signature.parameters[i].genericArguments.length){
+                var argType = arg.visit(this, context).type;
+                if(argType){
+                    for (const iterator of signature.parameters[i].genericArguments) {
+                        signature.setSpecifitType(iterator.name, argType);                        
+                    }
+                }
+            }
             argIndex++;
         }
         if (!context.expectedType)
@@ -394,27 +402,33 @@ export class TypeDetectorVisitor implements AstVisitor<TypeDetectorContext> {
         var expectedType = context.expectedType;
         context.expectedType = context.schema.create();
         var result = ast.left.visit(this, context) as TypeDetectorResult;
+        var selectedProperty = (result.type as ContextSchema).properties?.find(a => a.name === ast.token?.value);
         if (ast.left.span.end == context.typeAt ||
-            (ast.span.end === context.typeAt && result?.type instanceof ContextSchema &&
-                (result.type as ContextSchema).properties.find(a => a.name === ast.token.value)?.type instanceof ContextSchema)) {
+            (ast.span.end === context.typeAt &&
+                result?.type instanceof ContextSchema &&
+                selectedProperty?.type != null)) {
             result.suggestions = [new Token(TokenType.operation, Operations.point)];
-            return result;
+            if (selectedProperty?.type instanceof ContextSchema || selectedProperty?.type instanceof Enumerable)
+                return result;
         }
         if (result.type instanceof ContextSchema)
-            context.lastselectedProperty = result.type.properties.find(p => p.name == ast.token?.value);
+            context.lastselectedProperty = selectedProperty;
 
         if (ast.left.span.contains(context.typeAt))
             return result;
         if (result?.type instanceof ContextSchema || ContextSchema.extensionMethods.find(em => em.methodContext.isAssignableFrom(result?.type))) {
             if (ast.span.end <= context.typeAt) {
                 if (result.type instanceof ContextSchema)
-                    result.type = (result.type as ContextSchema)!.properties.find(a => a.name === ast.token.value)?.type;
+                    result.type = selectedProperty?.type;
                 else {
                     var method = ContextSchema.extensionMethods.find(em => em.methodContext.isAssignableFrom(result.type!) && em.name === ast.token.value);
                     if (method) {
-                        var tmp = Object.create(ExtensionMethod.prototype);
-                        method = Object.assign(tmp, { caption: method.caption, methodContext: result.type, signeture: method.signeture });
-                        result.type = method!.makeGenericMethod();
+                        var specificTypes = {} as any;
+                        let pidx = 0;
+                        for (var garg of method.methodContext.genericArguments) {
+                            specificTypes[garg.name] = result.type!.genericArguments[pidx++];
+                        }
+                        result.type = method!.makeGenericMethod(specificTypes);
                         result.suggestions = [new Token(TokenType.operation, Operations.begin_parentese)];
                         return result;
                     }

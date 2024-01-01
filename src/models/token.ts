@@ -60,7 +60,7 @@ export interface IType {
     isAssignableFrom(type: IType | undefined): unknown;
     get name(): string;
     get genericArguments(): Array<IType>;
-    makeGenericType(genericTypes: Array<IType>): IType;
+    makeGenericType(specificTypes: { [key: string]: IType } ): IType;
 }
 export class PrimitiveTypes implements IType {
     constructor(public type: string, public extendedType?: PrimitiveTypes) { }
@@ -68,7 +68,7 @@ export class PrimitiveTypes implements IType {
     get genericArguments(): Array<IType> {
         return [];
     }
-    makeGenericType(genericTypes: Array<IType>): IType {
+    makeGenericType(specificTypes: { [key: string]: IType }): IType {
         return this;
     }
     isAssignableFrom(type: IType): unknown {
